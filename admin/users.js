@@ -226,7 +226,7 @@ const DETAILS_HANDLED_KEYS = new Set([
   "email",
   "phone", "mobile", "secondaryPhone",
   "gender", "dob", "work",
-  "address", "city", "state", "pincode",
+  "address", "district", "city", "state", "country", "pincode",
   "active", "isActive", "status", "disabled", "blocked",
   "createdAt", "created_at", "createdOn", "dateCreated"
 ]);
@@ -297,8 +297,10 @@ function renderUserDetails(user) {
   const dob = user.dob || "";
   const work = user.work || "";
   const address = user.address || "";
+  const district = user.district || "";
   const city = user.city || "";
   const state = user.state || "";
+  const country = user.country || "";
   const pincode = user.pincode || "";
   const isBlocked = user.blocked === true;
 
@@ -382,6 +384,11 @@ function renderUserDetails(user) {
         <textarea id="editUserAddress" class="bf-input" rows="2" placeholder="Address">${escapeHtml(address)}</textarea>
       </div>
 
+      <div class="bf-field" style="margin-bottom:10px;">
+        <label class="bf-label">District</label>
+        <input type="text" id="editUserDistrict" class="bf-input" value="${escapeHtml(district)}">
+      </div>
+
       <div style="display:flex;gap:8px;">
         <div class="bf-field" style="margin-bottom:10px;flex:1;">
           <label class="bf-label">City</label>
@@ -393,9 +400,15 @@ function renderUserDetails(user) {
         </div>
       </div>
 
-      <div class="bf-field" style="margin-bottom:10px;">
-        <label class="bf-label">Pin Code</label>
-        <input type="text" id="editUserPincode" class="bf-input" value="${escapeHtml(pincode)}" maxlength="6">
+      <div style="display:flex;gap:8px;">
+        <div class="bf-field" style="margin-bottom:10px;flex:1;">
+          <label class="bf-label">Country</label>
+          <input type="text" id="editUserCountry" class="bf-input" value="${escapeHtml(country)}">
+        </div>
+        <div class="bf-field" style="margin-bottom:10px;flex:1;">
+          <label class="bf-label">Pin Code</label>
+          <input type="text" id="editUserPincode" class="bf-input" value="${escapeHtml(pincode)}" maxlength="6">
+        </div>
       </div>
 
       <button
@@ -874,8 +887,10 @@ async function saveUserEdits(uid) {
     dob: document.getElementById("editUserDob").value,
     work: document.getElementById("editUserWork").value.trim(),
     address: document.getElementById("editUserAddress").value.trim(),
+    district: document.getElementById("editUserDistrict").value.trim(),
     city: document.getElementById("editUserCity").value.trim(),
     state: document.getElementById("editUserState").value.trim(),
+    country: document.getElementById("editUserCountry").value.trim(),
     pincode: document.getElementById("editUserPincode").value.trim()
   };
 
