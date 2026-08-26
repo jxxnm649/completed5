@@ -445,3 +445,32 @@ exports.processWithdrawal = onCall(async (request) => {
   return { success: true };
 
 });
+
+
+/* ============================================================
+   4) LOGOUT OF ALL DEVICES
+   Revokes every refresh token for the calling user (Admin SDK only —
+   Firebase has no way to selectively revoke a single device's
+   session). The current device is signed out locally by the client
+   right after this succeeds.
+   ============================================================ */
+
+exports.revokeAllSessions = onCall(async (request) => {
+
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+
+  const uid = request.auth.uid;
+
+  await admin.auth().revokeRefreshTokens(uid);
+
+  // Clear the tracked device list too, since none of them are valid anymore.
+  const sessionsSnap = await db.collection("users").doc(uid).collection("sessions").get();
+  const batch = db.batch();
+  sessionsSnap.forEach(docSnap => batch.delete(docSnap.ref));
+  await batch.commit();
+
+  return { success: true };
+
+});
