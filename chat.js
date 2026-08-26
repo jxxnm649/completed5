@@ -23,6 +23,7 @@ const chatInput = document.getElementById("chatInput");
 const chatSendBtn = document.getElementById("chatSendBtn");
 
 let currentUser = null;
+let unsubscribeMessages = null;
 
 function escapeHtml(str) {
   if (typeof str !== "string") return str;
@@ -53,26 +54,46 @@ function renderMessages(messages) {
     return `
       <div class="chat-bubble-row ${isMine ? "mine" : "theirs"}">
         <div class="chat-bubble">
-          <div>${escapeHtml(m.text || "")}</div>
+          <div class="chat-bubble-text"></div>
           <div class="chat-bubble-time">${formatTime(m.createdAt)}</div>
         </div>
       </div>
     `;
   }).join("");
 
-  chatMessages.scrollTop = chatMessages.scrollHeight;
+  // Set message text via textContent (not innerHTML) so nothing in the
+  // stored text can ever be interpreted as markup or otherwise mangled.
+  const textNodes = chatMessages.querySelectorAll(".chat-bubble-text");
+  messages.forEach((m, i) => {
+    if (textNodes[i]) textNodes[i].textContent = m.text || "";
+  });
+
+  requestAnimationFrame(() => {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  });
 
 }
 
 function listenForMessages(uid) {
+
+  // Guard against a duplicate subscription if onAuthStateChanged ever
+  // fires more than once in the same page load (token refresh, etc.) —
+  // without this, old and new listeners would both be live at once.
+  if (unsubscribeMessages) {
+    unsubscribeMessages();
+    unsubscribeMessages = null;
+  }
+
   const q = query(collection(db, "chats", uid, "messages"), orderBy("createdAt", "asc"));
-  onSnapshot(q, (snapshot) => {
+
+  unsubscribeMessages = onSnapshot(q, (snapshot) => {
     const messages = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     renderMessages(messages);
   }, (error) => {
     console.error("Chat listen error:", error);
     chatMessages.innerHTML = `<div class="chat-empty">❌ Unable to load chat.</div>`;
   });
+
 }
 
 async function ensureChatDoc(user) {
@@ -97,10 +118,13 @@ chatReplyForm.addEventListener("submit", async (e) => {
 
   e.preventDefault();
 
+  if (chatSendBtn.disabled) return; // ignore double-tap while a send is in flight
+
   const text = chatInput.value.trim();
   if (!text || !currentUser) return;
 
   chatSendBtn.disabled = true;
+  chatInput.value = "";
 
   try {
 
@@ -118,11 +142,10 @@ chatReplyForm.addEventListener("submit", async (e) => {
       status: "Open"
     });
 
-    chatInput.value = "";
-
   } catch (error) {
     console.error("Send message error:", error);
     alert(error.message || "Failed to send message.");
+    chatInput.value = text; // restore so the user doesn't lose what they typed
   } finally {
     chatSendBtn.disabled = false;
   }

@@ -22,7 +22,7 @@ const DEFAULT_AVATAR = "https://api.dicebear.com/7.x/initials/svg?seed=U&backgro
 
 const FIELD_IDS = [
   "name", "mobile", "secondaryPhone", "gender", "dob", "work",
-  "address", "city", "state", "pincode"
+  "address", "district", "city", "state", "country", "pincode"
 ];
 
 let selectedPicFile = null;
@@ -32,7 +32,7 @@ function updateCompletion(data) {
 
   const trackedValues = [
     data.name, data.mobile, data.secondaryPhone, data.gender, data.dob,
-    data.work, data.address, data.city, data.state, data.pincode,
+    data.work, data.address, data.district, data.city, data.state, data.country, data.pincode,
     data.profilePicture
   ];
 
@@ -124,8 +124,10 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById("dob").value = data.dob || "";
   document.getElementById("work").value = data.work || "";
   document.getElementById("address").value = data.address || "";
+  document.getElementById("district").value = data.district || "";
   document.getElementById("city").value = data.city || "";
   document.getElementById("state").value = data.state || "";
+  document.getElementById("country").value = data.country || "India";
   document.getElementById("pincode").value = data.pincode || "";
 
   currentPicUrl = data.profilePicture || "";

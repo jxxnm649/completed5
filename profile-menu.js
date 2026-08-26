@@ -10,6 +10,8 @@ import {
   getDoc
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
+import { touchSession } from "./session-tracker.js";
+
 async function vendorLinkHtml(uid) {
   try {
     const snap = await getDoc(doc(db, "vendors", uid));
@@ -63,8 +65,12 @@ async function buildMenu(moreBtn, uid) {
 }
 
 onAuthStateChanged(auth, (user) => {
+  if (!user) return;
+
+  touchSession(user.uid);
+
   const moreBtn = document.getElementById("moreMenuBtn");
-  if (user && moreBtn && !document.getElementById("pmPopup")) {
+  if (moreBtn && !document.getElementById("pmPopup")) {
     buildMenu(moreBtn, user.uid);
   }
 });

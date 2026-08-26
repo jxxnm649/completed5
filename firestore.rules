@@ -100,6 +100,10 @@ service cloud.firestore {
         allow read, write: if isSelf(userId) || isAdmin();
       }
 
+      match /sessions/{sessionId} {
+        allow read, write: if isSelf(userId) || isAdmin();
+      }
+
     }
 
 
