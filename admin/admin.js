@@ -21,6 +21,17 @@ import { showToast } from "../design-system.js";
 
 
 /* ============================================================
+   GLOBAL SEARCH STATE
+   (users/orders are cached from loadDashboardMetrics;
+   products are fetched lazily on first search)
+   ============================================================ */
+
+let searchUsersCache = [];
+let searchOrdersCache = [];
+let searchProductsCache = null; // null = not fetched yet
+
+
+/* ============================================================
    ELEMENT REFS
    ============================================================ */
 
@@ -461,6 +472,8 @@ async function loadDashboardMetrics() {
     usersCount.textContent =
       usersSnapshot.size;
 
+    searchUsersCache = usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
 
     /* ---------- ORDERS ---------- */
 
@@ -472,6 +485,8 @@ async function loadDashboardMetrics() {
 
     ordersCount.textContent =
       ordersSnapshot.size;
+
+    searchOrdersCache = ordersSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
 
     /* ---------- VENDORS ---------- */
@@ -1130,98 +1145,4 @@ onAuthStateChanged(
   auth,
   async user => {
 
-    /* ---------- NOT LOGGED IN ---------- */
-
-    if (!user) {
-
-      showAuthRequired();
-
-      return;
-
-    }
-
-
-    try {
-
-      /*
-        Force refresh to get latest
-        Firebase custom claims.
-      */
-
-      const tokenResult =
-        await user.getIdTokenResult(
-          true
-        );
-
-
-      const claims =
-        tokenResult.claims || {};
-
-
-      /* ---------- ADMIN CHECK ---------- */
-
-      if (claims.admin !== true) {
-
-        showAccessDenied();
-
-        return;
-
-      }
-
-
-      /* ---------- USER INFO ---------- */
-
-      const displayName =
-        user.displayName ||
-        (
-          user.email
-            ? user.email.split("@")[0]
-            : "Admin"
-        );
-
-
-      userName.textContent =
-        displayName;
-
-
-      userEmail.textContent =
-        user.email || "";
-
-
-      userAvatar.textContent =
-        displayName
-          .charAt(0)
-          .toUpperCase();
-
-
-      /* ---------- NAVIGATION ---------- */
-
-      renderNav(claims);
-
-
-      /* ---------- SHOW ADMIN ---------- */
-
-      showShell();
-
-
-      /* ---------- LOAD DATA ---------- */
-
-      await loadDashboardMetrics();
-
-
-    } catch (error) {
-
-      console.error(
-        "Admin verification error:",
-        error
-      );
-
-
-      showError(
-        "We couldn't verify your admin access. Please try again."
-      );
-
-    }
-
-  }
-);
+    /* ---------- NOT LOGGED IN ---------- *
