@@ -15,11 +15,18 @@ import {
   getDocs,
   doc,
   getDoc,
+  updateDoc,
   query,
   where
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
-import { showToast } from "../design-system.js";
+import {
+  openModal,
+  closeModal,
+  showToast
+} from "../design-system.js";
+
+import { logAdminAction } from "./audit.js";
 
 
 /* ============================================================
@@ -31,6 +38,13 @@ import { showToast } from "../design-system.js";
 let searchUsersCache = [];
 let searchOrdersCache = [];
 let searchProductsCache = null; // null = not fetched yet
+
+const STATUS_OPTIONS = [
+  "Pending", "Confirmed", "Packed", "Shipped",
+  "Out for Delivery", "Delivered", "Cancelled"
+];
+
+let currentOrderDetailsId = null;
 
 
 /* ============================================================
@@ -597,15 +611,39 @@ async function loadDashboardMetrics() {
         .slice(0, 5);
 
       recentOrdersEl.innerHTML = sorted.length
-        ? sorted.map(o => `
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);">
-              <div>
-                <div style="font-weight:700;font-size:13px;">#${o.orderNumber || o.id.slice(0, 8).toUpperCase()} — ${(o.customerName || "Customer")}</div>
-                <div style="font-size:11px;opacity:.6;">₹${o.total || 0}</div>
+        ? sorted.map(o => {
+
+            const products = Array.isArray(o.products) ? o.products : [];
+            const firstProduct = products[0] || {};
+            const extraCount = products.length > 1 ? products.length - 1 : 0;
+
+            return `
+              <div class="bf-admin-recent-order-row" data-order-id="${o.id}">
+
+                <img
+                  class="bf-admin-recent-order-thumb"
+                  src="${escapeSearchHtml(firstProduct.image || "")}"
+                  alt="${escapeSearchHtml(firstProduct.productName || "Product")}"
+                  onerror="this.style.visibility='hidden'">
+
+                <div class="bf-admin-recent-order-info">
+                  <div class="bf-admin-recent-order-title">
+                    #${escapeSearchHtml(o.orderNumber || o.id.slice(0, 8).toUpperCase())} — ${escapeSearchHtml(o.customerName || "Customer")}
+                  </div>
+                  <div class="bf-admin-recent-order-sub">
+                    ${escapeSearchHtml(firstProduct.productName || "")}${extraCount ? ` +${extraCount} more` : ""}
+                  </div>
+                  <div class="bf-admin-recent-order-sub">
+                    ₹${o.total || 0}
+                  </div>
+                </div>
+
+                <span class="bf-status-pill bf-status-pending bf-admin-recent-order-status">${escapeSearchHtml(o.status || "Pending")}</span>
+
               </div>
-              <span class="bf-status-pill bf-status-pending" style="font-size:10px;">${o.status || "Pending"}</span>
-            </div>
-          `).join("")
+            `;
+
+          }).join("")
         : `<div style="padding:10px 0;opacity:.6;font-size:13px;">No orders yet.</div>`;
 
     }
@@ -1068,317 +1106,4 @@ adminNav.addEventListener(
     if (navId === "notifications") {
 
       window.location.href =
-        "notifications.html";
-
-      return;
-
-    }
-
-
-    /* ---------- REPORTS ---------- */
-
-    if (navId === "reports") {
-
-      window.location.href =
-        "reports.html";
-
-      return;
-
-    }
-
-
-    /* ---------- AUDIT LOG ---------- */
-
-    if (navId === "audit-log") {
-
-      window.location.href =
-        "audit-log.html";
-
-      return;
-
-    }
-
-
-    /* ---------- SETTINGS ---------- */
-
-    if (navId === "settings") {
-
-      window.location.href =
-        "settings.html";
-
-      return;
-
-    }
-
-
-    /* ---------- OTHER SECTIONS ---------- */
-
-    showToast(
-      "This section is coming soon",
-      "info"
-    );
-
-
-    closeDrawer();
-
-  }
-);
-
-
-/* ============================================================
-   RETRY
-   ============================================================ */
-
-errorRetryBtn.addEventListener(
-  "click",
-  () => {
-
-    window.location.reload();
-
-  }
-);
-
-
-/* ============================================================
-   AUTH GUARD
-   ============================================================ */
-
-// Safety net: if auth check hasn't resolved to any state within
-// 10s (slow/broken network, Firebase Auth not responding), stop
-// showing an endless spinner and let the user retry instead.
-const authWatchdog = setTimeout(() => {
-  if (initialLoadingState && !initialLoadingState.classList.contains("bf-hidden")) {
-    showError("Taking longer than expected to verify your login. Check your connection and retry.");
-  }
-}, 10000);
-
-onAuthStateChanged(
-  auth,
-  async user => {
-
-    clearTimeout(authWatchdog);
-
-    /* ---------- NOT LOGGED IN ---------- */
-
-    if (!user) {
-
-      showAuthRequired();
-
-      return;
-
-    }
-
-
-    try {
-
-      /*
-        Check admin access the same way the rest of the
-        admin panel does: a Firestore `isAdmin` flag on the
-        user's own document (not a Firebase custom claim —
-        nothing in this project ever sets one, so that check
-        could never pass).
-      */
-
-      const adminDoc =
-        await getDoc(
-          doc(db, "users", user.uid)
-        );
-
-
-      /* ---------- ADMIN CHECK ---------- */
-
-      if (!adminDoc.exists() || adminDoc.data().isAdmin !== true) {
-
-        showAccessDenied();
-
-        return;
-
-      }
-
-
-      /* ---------- USER INFO ---------- */
-
-      const displayName =
-        user.displayName ||
-        (
-          user.email
-            ? user.email.split("@")[0]
-            : "Admin"
-        );
-
-
-      userName.textContent =
-        displayName;
-
-
-      userEmail.textContent =
-        user.email || "";
-
-
-      userAvatar.textContent =
-        displayName
-          .charAt(0)
-          .toUpperCase();
-
-
-      /* ---------- NAVIGATION ---------- */
-
-      renderNav();
-
-
-      /* ---------- SHOW ADMIN ---------- */
-
-      showShell();
-
-
-      /* ---------- LOAD DATA ---------- */
-
-      await loadDashboardMetrics();
-
-
-    } catch (error) {
-
-      console.error(
-        "Admin verification error:",
-        error
-      );
-
-
-      showError(
-        "We couldn't verify your admin access. Please try again."
-      );
-
-    }
-
-  }
-);
-
-
-/* ============================================================
-   GLOBAL SEARCH (Users / Products / Orders)
-   ============================================================ */
-
-const adminGlobalSearch = document.getElementById("adminGlobalSearch");
-const adminSearchResults = document.getElementById("adminSearchResults");
-
-let searchDebounceTimer = null;
-
-function escapeSearchHtml(str) {
-  return String(str ?? "").replace(/[&<>"']/g, m => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  })[m]);
-}
-
-async function ensureProductsCache() {
-  if (searchProductsCache !== null) return searchProductsCache;
-  try {
-    const snap = await getDocs(collection(db, "products"));
-    searchProductsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  } catch (error) {
-    console.error("Search products load error:", error);
-    searchProductsCache = [];
-  }
-  return searchProductsCache;
-}
-
-function resultRow(icon, title, subtitle, href) {
-  return `
-    <a href="${href}" class="bf-admin-search-row">
-      <span class="bf-admin-search-row-icon">${icon}</span>
-      <span class="bf-admin-search-row-text">
-        <span class="bf-admin-search-row-title">${title}</span>
-        <span class="bf-admin-search-row-sub">${subtitle}</span>
-      </span>
-    </a>
-  `;
-}
-
-function resultGroup(label, rowsHtml) {
-  if (!rowsHtml) return "";
-  return `
-    <div class="bf-admin-search-group">
-      <div class="bf-admin-search-group-label">${label}</div>
-      ${rowsHtml}
-    </div>
-  `;
-}
-
-async function runGlobalSearch(term) {
-
-  const q = term.trim().toLowerCase();
-
-  if (!q) {
-    adminSearchResults.innerHTML = "";
-    return;
-  }
-
-  await ensureProductsCache();
-
-  const matchedUsers = searchUsersCache.filter(u => {
-    const name = (u.name || u.fullName || u.displayName || "").toLowerCase();
-    const phone = (u.phone || u.mobile || "").toLowerCase();
-    const email = (u.email || "").toLowerCase();
-    return name.includes(q) || phone.includes(q) || email.includes(q);
-  }).slice(0, 5);
-
-  const matchedProducts = (searchProductsCache || []).filter(p => {
-    const name = (p.productName || "").toLowerCase();
-    const category = (p.category || "").toLowerCase();
-    return name.includes(q) || category.includes(q);
-  }).slice(0, 5);
-
-  const matchedOrders = searchOrdersCache.filter(o => {
-    const orderNo = (o.orderNumber || o.id || "").toLowerCase();
-    const customer = (o.customerName || "").toLowerCase();
-    return orderNo.includes(q) || customer.includes(q);
-  }).slice(0, 5);
-
-  if (!matchedUsers.length && !matchedProducts.length && !matchedOrders.length) {
-    adminSearchResults.innerHTML = `
-      <div class="bf-admin-search-empty">No results for "${escapeSearchHtml(term)}"</div>
-    `;
-    return;
-  }
-
-  adminSearchResults.innerHTML =
-    resultGroup("Users", matchedUsers.map(u =>
-      resultRow(
-        "👤",
-        escapeSearchHtml(u.name || u.fullName || u.displayName || "Unnamed User"),
-        escapeSearchHtml(u.phone || u.mobile || u.email || ""),
-        "users.html"
-      )
-    ).join("")) +
-    resultGroup("Products", matchedProducts.map(p =>
-      resultRow(
-        "📦",
-        escapeSearchHtml(p.productName || "Product"),
-        `₹${p.price ?? 0}${p.category ? " · " + escapeSearchHtml(p.category) : ""}`,
-        `../product.html?id=${p.id}`
-      )
-    ).join("")) +
-    resultGroup("Orders", matchedOrders.map(o =>
-      resultRow(
-        "🧾",
-        `#${escapeSearchHtml(o.orderNumber || o.id.slice(0, 8).toUpperCase())}`,
-        `${escapeSearchHtml(o.customerName || "Customer")} · ₹${o.total || 0}`,
-        "orders.html"
-      )
-    ).join(""));
-
-}
-
-if (adminGlobalSearch) {
-
-  adminGlobalSearch.addEventListener("input", () => {
-
-    clearTimeout(searchDebounceTimer);
-    const term = adminGlobalSearch.value;
-
-    searchDebounceTimer = setTimeout(() => {
-      runGlobalSearch(term);
-    }, 200);
-
-  });
-
-}
+        "notifications.
