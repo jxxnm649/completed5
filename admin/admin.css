@@ -472,3 +472,90 @@ html, body.bf-admin-body{
   border-color: var(--marigold-deep, #D98925);
   font-weight: 700;
 }
+
+/* ---------- Global Search (dashboard) ---------- */
+
+.bf-admin-search-card{
+  padding: 16px;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.bf-admin-search-input{
+  width: 100%;
+}
+
+.bf-admin-search-results{
+  margin-top: 10px;
+}
+
+.bf-admin-search-group{
+  margin-top: 10px;
+}
+
+.bf-admin-search-group:first-child{
+  margin-top: 4px;
+}
+
+.bf-admin-search-group-label{
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  opacity: .55;
+  padding: 0 4px 4px;
+}
+
+.bf-admin-search-empty{
+  padding: 14px 4px;
+  font-size: 13px;
+  opacity: .65;
+}
+
+.bf-admin-search-row{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--radius-sm, 8px);
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 1px solid var(--line, #E4DED2);
+  transition: background .15s ease;
+}
+
+.bf-admin-search-row:last-child{
+  border-bottom: none;
+}
+
+.bf-admin-search-row:hover{
+  background: var(--paper-dim, #F2ECE0);
+}
+
+.bf-admin-search-row-icon{
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.bf-admin-search-row-text{
+  min-width: 0;
+}
+
+.bf-admin-search-row-title{
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink, #14213D);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bf-admin-search-row-sub{
+  display: block;
+  font-size: 11px;
+  opacity: .65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

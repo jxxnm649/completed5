@@ -1283,15 +1283,11 @@ async function ensureProductsCache() {
 
 function resultRow(icon, title, subtitle, href) {
   return `
-    <a href="${href}" style="
-      display:flex;align-items:center;gap:10px;
-      padding:10px;border-radius:8px;text-decoration:none;
-      color:inherit;border-bottom:1px solid var(--line,#eee);
-    ">
-      <span style="font-size:18px;">${icon}</span>
-      <span style="min-width:0;">
-        <span style="display:block;font-weight:600;font-size:13px;">${title}</span>
-        <span style="display:block;font-size:11px;opacity:.65;">${subtitle}</span>
+    <a href="${href}" class="bf-admin-search-row">
+      <span class="bf-admin-search-row-icon">${icon}</span>
+      <span class="bf-admin-search-row-text">
+        <span class="bf-admin-search-row-title">${title}</span>
+        <span class="bf-admin-search-row-sub">${subtitle}</span>
       </span>
     </a>
   `;
@@ -1300,8 +1296,8 @@ function resultRow(icon, title, subtitle, href) {
 function resultGroup(label, rowsHtml) {
   if (!rowsHtml) return "";
   return `
-    <div style="margin-top:10px;">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;opacity:.55;padding:0 4px 4px;">${label}</div>
+    <div class="bf-admin-search-group">
+      <div class="bf-admin-search-group-label">${label}</div>
       ${rowsHtml}
     </div>
   `;
@@ -1339,7 +1335,7 @@ async function runGlobalSearch(term) {
 
   if (!matchedUsers.length && !matchedProducts.length && !matchedOrders.length) {
     adminSearchResults.innerHTML = `
-      <div style="padding:14px;font-size:13px;opacity:.65;">No results for "${escapeSearchHtml(term)}"</div>
+      <div class="bf-admin-search-empty">No results for "${escapeSearchHtml(term)}"</div>
     `;
     return;
   }
