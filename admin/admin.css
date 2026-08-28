@@ -571,3 +571,61 @@ html, body.bf-admin-body{
   transform: translateY(-2px);
   box-shadow: 0 4px 14px rgba(0,0,0,.08);
 }
+
+/* ---------- Recent Orders (dashboard) — horizontal cards ---------- */
+
+.bf-admin-recent-order-row{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 6px;
+  border-bottom: 1px solid var(--line, #E4DED2);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 8px);
+  transition: background .15s ease;
+}
+
+.bf-admin-recent-order-row:last-child{
+  border-bottom: none;
+}
+
+.bf-admin-recent-order-row:hover{
+  background: var(--paper-dim, #F2ECE0);
+}
+
+.bf-admin-recent-order-thumb{
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--paper-dim, #F2ECE0);
+  border: 1px solid var(--line, #E4DED2);
+}
+
+.bf-admin-recent-order-info{
+  flex: 1;
+  min-width: 0;
+}
+
+.bf-admin-recent-order-title{
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink, #14213D);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bf-admin-recent-order-sub{
+  font-size: 11px;
+  opacity: .65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bf-admin-recent-order-status{
+  font-size: 10px;
+  flex-shrink: 0;
+}
