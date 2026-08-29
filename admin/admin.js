@@ -1106,4 +1106,491 @@ adminNav.addEventListener(
     if (navId === "notifications") {
 
       window.location.href =
-        "notifications.
+        "notifications.html";
+
+      return;
+
+    }
+
+
+    /* ---------- REPORTS ---------- */
+
+    if (navId === "reports") {
+
+      window.location.href =
+        "reports.html";
+
+      return;
+
+    }
+
+
+    /* ---------- AUDIT LOG ---------- */
+
+    if (navId === "audit-log") {
+
+      window.location.href =
+        "audit-log.html";
+
+      return;
+
+    }
+
+
+    /* ---------- SETTINGS ---------- */
+
+    if (navId === "settings") {
+
+      window.location.href =
+        "settings.html";
+
+      return;
+
+    }
+
+
+    /* ---------- OTHER SECTIONS ---------- */
+
+    showToast(
+      "This section is coming soon",
+      "info"
+    );
+
+
+    closeDrawer();
+
+  }
+);
+
+
+/* ============================================================
+   RETRY
+   ============================================================ */
+
+errorRetryBtn.addEventListener(
+  "click",
+  () => {
+
+    window.location.reload();
+
+  }
+);
+
+
+/* ============================================================
+   AUTH GUARD
+   ============================================================ */
+
+// Safety net: if auth check hasn't resolved to any state within
+// 10s (slow/broken network, Firebase Auth not responding), stop
+// showing an endless spinner and let the user retry instead.
+const authWatchdog = setTimeout(() => {
+  if (initialLoadingState && !initialLoadingState.classList.contains("bf-hidden")) {
+    showError("Taking longer than expected to verify your login. Check your connection and retry.");
+  }
+}, 10000);
+
+onAuthStateChanged(
+  auth,
+  async user => {
+
+    clearTimeout(authWatchdog);
+
+    /* ---------- NOT LOGGED IN ---------- */
+
+    if (!user) {
+
+      showAuthRequired();
+
+      return;
+
+    }
+
+
+    try {
+
+      /*
+        Check admin access the same way the rest of the
+        admin panel does: a Firestore `isAdmin` flag on the
+        user's own document (not a Firebase custom claim —
+        nothing in this project ever sets one, so that check
+        could never pass).
+      */
+
+      const adminDoc =
+        await getDoc(
+          doc(db, "users", user.uid)
+        );
+
+
+      /* ---------- ADMIN CHECK ---------- */
+
+      if (!adminDoc.exists() || adminDoc.data().isAdmin !== true) {
+
+        showAccessDenied();
+
+        return;
+
+      }
+
+
+      /* ---------- USER INFO ---------- */
+
+      const displayName =
+        user.displayName ||
+        (
+          user.email
+            ? user.email.split("@")[0]
+            : "Admin"
+        );
+
+
+      userName.textContent =
+        displayName;
+
+
+      userEmail.textContent =
+        user.email || "";
+
+
+      userAvatar.textContent =
+        displayName
+          .charAt(0)
+          .toUpperCase();
+
+
+      /* ---------- NAVIGATION ---------- */
+
+      renderNav();
+
+
+      /* ---------- SHOW ADMIN ---------- */
+
+      showShell();
+
+
+      /* ---------- LOAD DATA ---------- */
+
+      await loadDashboardMetrics();
+
+
+    } catch (error) {
+
+      console.error(
+        "Admin verification error:",
+        error
+      );
+
+
+      showError(
+        "We couldn't verify your admin access. Please try again."
+      );
+
+    }
+
+  }
+);
+
+
+/* ============================================================
+   GLOBAL SEARCH (Users / Products / Orders)
+   ============================================================ */
+
+const adminGlobalSearch = document.getElementById("adminGlobalSearch");
+const adminSearchResults = document.getElementById("adminSearchResults");
+
+let searchDebounceTimer = null;
+
+function escapeSearchHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, m => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[m]);
+}
+
+async function ensureProductsCache() {
+  if (searchProductsCache !== null) return searchProductsCache;
+  try {
+    const snap = await getDocs(collection(db, "products"));
+    searchProductsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.error("Search products load error:", error);
+    searchProductsCache = [];
+  }
+  return searchProductsCache;
+}
+
+function resultRow(icon, title, subtitle, href) {
+  return `
+    <a href="${href}" class="bf-admin-search-row">
+      <span class="bf-admin-search-row-icon">${icon}</span>
+      <span class="bf-admin-search-row-text">
+        <span class="bf-admin-search-row-title">${title}</span>
+        <span class="bf-admin-search-row-sub">${subtitle}</span>
+      </span>
+    </a>
+  `;
+}
+
+function resultGroup(label, rowsHtml) {
+  if (!rowsHtml) return "";
+  return `
+    <div class="bf-admin-search-group">
+      <div class="bf-admin-search-group-label">${label}</div>
+      ${rowsHtml}
+    </div>
+  `;
+}
+
+async function runGlobalSearch(term) {
+
+  const q = term.trim().toLowerCase();
+
+  if (!q) {
+    adminSearchResults.innerHTML = "";
+    return;
+  }
+
+  await ensureProductsCache();
+
+  const matchedUsers = searchUsersCache.filter(u => {
+    const name = (u.name || u.fullName || u.displayName || "").toLowerCase();
+    const phone = (u.phone || u.mobile || "").toLowerCase();
+    const email = (u.email || "").toLowerCase();
+    return name.includes(q) || phone.includes(q) || email.includes(q);
+  }).slice(0, 5);
+
+  const matchedProducts = (searchProductsCache || []).filter(p => {
+    const name = (p.productName || "").toLowerCase();
+    const category = (p.category || "").toLowerCase();
+    return name.includes(q) || category.includes(q);
+  }).slice(0, 5);
+
+  const matchedOrders = searchOrdersCache.filter(o => {
+    const orderNo = (o.orderNumber || o.id || "").toLowerCase();
+    const customer = (o.customerName || "").toLowerCase();
+    return orderNo.includes(q) || customer.includes(q);
+  }).slice(0, 5);
+
+  if (!matchedUsers.length && !matchedProducts.length && !matchedOrders.length) {
+    adminSearchResults.innerHTML = `
+      <div class="bf-admin-search-empty">No results for "${escapeSearchHtml(term)}"</div>
+    `;
+    return;
+  }
+
+  adminSearchResults.innerHTML =
+    resultGroup("Users", matchedUsers.map(u =>
+      resultRow(
+        "👤",
+        escapeSearchHtml(u.name || u.fullName || u.displayName || "Unnamed User"),
+        escapeSearchHtml(u.phone || u.mobile || u.email || ""),
+        "users.html"
+      )
+    ).join("")) +
+    resultGroup("Products", matchedProducts.map(p =>
+      resultRow(
+        "📦",
+        escapeSearchHtml(p.productName || "Product"),
+        `₹${p.price ?? 0}${p.category ? " · " + escapeSearchHtml(p.category) : ""}`,
+        `../product.html?id=${p.id}`
+      )
+    ).join("")) +
+    resultGroup("Orders", matchedOrders.map(o =>
+      resultRow(
+        "🧾",
+        `#${escapeSearchHtml(o.orderNumber || o.id.slice(0, 8).toUpperCase())}`,
+        `${escapeSearchHtml(o.customerName || "Customer")} · ₹${o.total || 0}`,
+        "orders.html"
+      )
+    ).join(""));
+
+}
+
+if (adminGlobalSearch) {
+
+  adminGlobalSearch.addEventListener("input", () => {
+
+    clearTimeout(searchDebounceTimer);
+    const term = adminGlobalSearch.value;
+
+    searchDebounceTimer = setTimeout(() => {
+      runGlobalSearch(term);
+    }, 200);
+
+  });
+
+}
+
+
+/* ============================================================
+   RECENT ORDERS — DETAILS MODAL
+   (click a row to see the full order: buyer, address, items
+   with their catalogue image, and update the order status)
+   ============================================================ */
+
+const orderDetailsModal = document.getElementById("orderDetailsModal");
+const orderDetailsCloseBtn = document.getElementById("orderDetailsCloseBtn");
+const orderDetailsContent = document.getElementById("orderDetailsContent");
+
+function formatOrderDate(ts) {
+  try {
+    const d = ts?.toDate ? ts.toDate() : new Date(ts);
+    if (isNaN(d.getTime())) return "Not available";
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) +
+      " · " +
+      d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "Not available";
+  }
+}
+
+function renderOrderDetails(order) {
+
+  const total = order.total ?? order.totalPrice ?? 0;
+  const products = Array.isArray(order.products) ? order.products : [];
+
+  const productsHTML = products.length
+    ? products.map(p => `
+        <div style="display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line, #E4DED2);">
+          <img
+            src="${escapeSearchHtml(p.image || "")}"
+            alt="${escapeSearchHtml(p.productName || "")}"
+            style="width:50px; height:50px; object-fit:cover; border-radius:8px;">
+
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:13px;">
+              ${escapeSearchHtml(p.productName || "Product")}${p.qty > 1 ? ` × ${p.qty}` : ""}
+            </div>
+            ${(p.selectedSize || p.selectedColour) ? `
+              <div style="font-size:12px; opacity:.65;">
+                ${escapeSearchHtml([p.selectedSize, p.selectedColour].filter(Boolean).join(", "))}
+              </div>
+            ` : ""}
+          </div>
+
+          <div style="font-weight:600; font-size:13px;">
+            ₹${p.price ?? ""}
+          </div>
+        </div>
+      `).join("")
+    : `<p style="opacity:.6;">No item details available.</p>`;
+
+  orderDetailsContent.innerHTML = `
+
+    <div style="margin-bottom:14px;">
+      <div><b>Order ID:</b> #${escapeSearchHtml(order.orderNumber || order.id.slice(0, 8).toUpperCase())}</div>
+      <div><b>Customer:</b> ${escapeSearchHtml(order.customerName || "Customer")}</div>
+      <div><b>Mobile:</b> ${escapeSearchHtml(order.mobile || "Not available")}</div>
+      <div><b>Address:</b> ${escapeSearchHtml(order.address || "Not available")}</div>
+      <div><b>Payment:</b> ${order.paymentMethod === "cod" ? "Cash on Delivery" : "Paid Online"}</div>
+      <div><b>Total:</b> ₹${total}</div>
+      <div><b>Placed on:</b> ${formatOrderDate(order.createdAt)}</div>
+    </div>
+
+    ${order.mobile ? `
+      <a href="tel:${escapeSearchHtml(order.mobile)}" style="text-decoration:none;">
+        <button type="button" class="bf-btn bf-btn-primary bf-btn-block" style="margin-bottom:14px;">
+          📞 Call Customer
+        </button>
+      </a>
+    ` : ""}
+
+    <h3 style="font-size:14px; margin:16px 0 8px;">🛍️ Items</h3>
+    <div style="margin-bottom:16px;">
+      ${productsHTML}
+    </div>
+
+    <h3 style="font-size:14px; margin:16px 0 8px;">📦 Update Status</h3>
+
+    <div class="bf-field">
+      <select id="dashOrderStatusSelect" class="bf-select">
+        ${STATUS_OPTIONS.map(s =>
+          `<option value="${s}" ${order.status === s ? "selected" : ""}>${s}</option>`
+        ).join("")}
+      </select>
+    </div>
+
+    <button
+      type="button"
+      id="dashUpdateOrderStatusBtn"
+      class="bf-btn bf-btn-primary bf-btn-block">
+      Update Status
+    </button>
+
+    <a href="orders.html" class="bf-btn bf-btn-ghost bf-btn-block" style="margin-top:8px;text-decoration:none;text-align:center;">
+      Open in Orders page
+    </a>
+
+  `;
+
+  const updateBtn = document.getElementById("dashUpdateOrderStatusBtn");
+  if (updateBtn) {
+    updateBtn.addEventListener("click", async () => {
+
+      const newStatus = document.getElementById("dashOrderStatusSelect").value;
+
+      updateBtn.disabled = true;
+      updateBtn.textContent = "Updating...";
+
+      try {
+
+        await updateDoc(doc(db, "orders", order.id), { status: newStatus });
+
+        await logAdminAction("Updated order status", "Dashboard", {
+          orderId: order.id,
+          newStatus
+        });
+
+        order.status = newStatus;
+
+        const cachedOrder = searchOrdersCache.find(o => o.id === order.id);
+        if (cachedOrder) cachedOrder.status = newStatus;
+
+        showToast("Order status updated", "success");
+        closeModal("orderDetailsModal");
+
+        await loadDashboardMetrics();
+
+      } catch (error) {
+
+        console.error("Order status update error:", error);
+        showToast(error.message || "Failed to update status.", "danger");
+
+      } finally {
+
+        updateBtn.disabled = false;
+        updateBtn.textContent = "Update Status";
+
+      }
+
+    });
+  }
+
+}
+
+const recentOrdersListEl = document.getElementById("recentOrdersList");
+
+if (recentOrdersListEl) {
+
+  recentOrdersListEl.addEventListener("click", (e) => {
+
+    const row = e.target.closest(".bf-admin-recent-order-row");
+    if (!row) return;
+
+    const orderId = row.dataset.orderId;
+    const order = searchOrdersCache.find(o => o.id === orderId);
+    if (!order) return;
+
+    currentOrderDetailsId = orderId;
+    renderOrderDetails(order);
+    openModal("orderDetailsModal");
+
+  });
+
+}
+
+if (orderDetailsCloseBtn) {
+  orderDetailsCloseBtn.addEventListener("click", () => {
+    closeModal("orderDetailsModal");
+  });
+}
