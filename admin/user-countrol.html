@@ -216,9 +216,10 @@ body{
     border:0;
     background:#eef2f7;
     color:#172033;
-    padding:10px 14px;
-    border-radius:8px;
-    font-size:12px;
+    padding:14px 20px;
+    border-radius:10px;
+    font-size:14px;
+    font-weight:600;
     cursor:pointer;
     white-space:nowrap;
 }
@@ -448,6 +449,11 @@ textarea{
     id="search"
     class="search"
     placeholder="🔍 Search user..."
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+    name="bf-admin-user-search-no-autofill"
 >
 
 <div id="userList">
@@ -652,11 +658,31 @@ document.getElementById("search").addEventListener("input", function(){
 
     var value = this.value.toLowerCase().trim();
 
+    if (value === "") {
+        showUsers(users);
+        return;
+    }
+
     var filtered = users.filter(function(u){
         return userName(u).toLowerCase().indexOf(value) !== -1 ||
                userPhone(u).toLowerCase().indexOf(value) !== -1 ||
                u.id.toLowerCase().indexOf(value) !== -1;
     });
+
+    // Exactly one match — jump straight into that customer's full
+    // profile instead of showing a list (nothing else to pick from).
+    if (filtered.length === 1) {
+
+        selectedUser = filtered[0];
+        showUsers(filtered);
+        showDetails();
+
+        var detailsCard = document.querySelector(".main > .card:last-child");
+        if (detailsCard) detailsCard.scrollIntoView({ behavior: "smooth", block: "start" });
+
+        return;
+
+    }
 
     showUsers(filtered);
 
@@ -671,6 +697,20 @@ function info(label, value){
     return '<div class="info"><label>'+escapeHtml(label)+'</label>'+escapeHtml(value)+'</div>';
 }
 
+// Same as info(), but with its own ✏ button that edits ONLY this
+// one field (fieldKey is used by editField() to know what to save).
+function editableInfo(label, value, fieldKey){
+    return '' +
+    '<div class="info" style="position:relative;">' +
+        '<label>'+escapeHtml(label)+'</label>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+            '<span class="editable-value" style="word-break:break-word;">'+escapeHtml(value)+'</span>' +
+            '<button type="button" class="field-edit-btn" data-field="'+escapeHtml(fieldKey)+'" data-label="'+escapeHtml(label)+'" ' +
+                'style="border:0;background:none;cursor:pointer;font-size:15px;padding:2px 4px;flex-shrink:0;" ' +
+                'aria-label="Edit '+escapeHtml(label)+'">✏</button>' +
+        '</div>' +
+    '</div>';
+}
 
 /* =====================================================
    USER DETAILS (Profile tab renders instantly,
@@ -715,16 +755,15 @@ function showDetails(){
 
     '<div id="profile" class="section active">' +
         '<h3>👤 Profile Information</h3>' +
-        '<div class="info-grid">' +
+        '<div class="info-grid" id="profileInfoGrid">' +
             info("User ID", u.id) +
-            info("Full Name", userName(u)) +
-            info("Mobile", userPhone(u)) +
+            editableInfo("Full Name", userName(u), "name") +
+            editableInfo("Mobile", userPhone(u), "phone") +
             info("Email", u.email || "Not available") +
-            info("Address", u.address || "Not available") +
+            editableInfo("Address", u.address || "Not available", "address") +
             info("Account Status", statusText) +
         '</div>' +
         '<br>' +
-        '<button class="btn" id="editProfileBtn">✏ Edit Profile</button>' +
         '<button class="btn red" id="blockBtn">'+(blocked ? "Unblock User" : "Block User")+'</button>' +
         '<button class="btn gray" id="resetPassBtn">🔑 Reset Password</button>' +
     '</div>' +
@@ -761,13 +800,11 @@ function showDetails(){
     '<div id="bank" class="section">' +
         '<h3>🏦 Bank Details / UPI</h3>' +
         '<div class="info-grid" id="bankInfoGrid">' +
-            info("UPI ID", u.upi || "Not available") +
-            info("Bank", u.bankName || u.bank || "Not available") +
-            info("Account Number", u.accountNumber || u.account || "Not available") +
-            info("IFSC", u.ifsc || "Not available") +
+            editableInfo("UPI ID", u.upi || "Not available", "upi") +
+            editableInfo("Bank", u.bankName || u.bank || "Not available", "bankName") +
+            editableInfo("Account Number", u.accountNumber || u.account || "Not available", "accountNumber") +
+            editableInfo("IFSC", u.ifsc || "Not available", "ifsc") +
         '</div>' +
-        '<br>' +
-        '<button class="btn" id="editBankBtn">✏ Edit Bank Details</button>' +
     '</div>' +
 
     '<div id="referral" class="section">' +
@@ -826,38 +863,66 @@ function showDetails(){
     loadReferralTab(u.id, true);
 
 
-    /* PROFILE ACTIONS */
+    /* PER-FIELD EDIT (Profile + Bank/UPI) */
+    // Each ✏ button edits exactly one field, via a single prompt,
+    // and only that field is saved and re-rendered.
 
-    document.getElementById("editProfileBtn").onclick = async function(){
-
-        var newName = prompt("Full name:", userName(u));
-        if(newName === null) return;
-        var newPhone = prompt("Phone:", userPhone(u));
-        if(newPhone === null) return;
-        var newAddress = prompt("Address:", u.address || "");
-        if(newAddress === null) return;
-
-        try{
-            await updateDoc(doc(db, "users", u.id), {
-                name: newName.trim(),
-                phone: newPhone.trim(),
-                address: newAddress.trim()
-            });
-
-            u.name = newName.trim();
-            u.phone = newPhone.trim();
-            u.address = newAddress.trim();
-
-            await logAdminAction("Updated profile", "Users", { userId: u.id });
-
-            showUsers(users);
-            showDetails();
-
-        }catch(error){
-            alert(error.message || "Failed to update profile.");
-        }
-
+    var FIELD_MAP = {
+        name:          { docField: "name",          isProfileName: true },
+        phone:         { docField: "phone" },
+        address:       { docField: "address" },
+        upi:           { docField: "upi" },
+        bankName:      { docField: "bankName" },
+        accountNumber: { docField: "accountNumber" },
+        ifsc:          { docField: "ifsc" }
     };
+
+    document.querySelectorAll(".field-edit-btn").forEach(function(btn){
+
+        btn.onclick = async function(){
+
+            var fieldKey = this.dataset.field;
+            var label = this.dataset.label;
+            var mapping = FIELD_MAP[fieldKey];
+            if(!mapping) return;
+
+            var currentValue = fieldKey === "name" ? userName(u) :
+                                fieldKey === "phone" ? userPhone(u) :
+                                fieldKey === "bankName" ? (u.bankName || u.bank || "") :
+                                fieldKey === "accountNumber" ? (u.accountNumber || u.account || "") :
+                                (u[fieldKey] || "");
+            var newValue = prompt(label + ":", currentValue);
+
+            if(newValue === null) return; // cancelled
+            newValue = newValue.trim();
+
+            try{
+
+                var update = {};
+                update[mapping.docField] = newValue;
+
+                await updateDoc(doc(db, "users", u.id), update);
+
+                u[mapping.docField] = newValue;
+
+                await logAdminAction("Updated " + label, "Users", { userId: u.id, field: mapping.docField });
+
+                // Update just this field's display, and the sidebar
+                // card too if the name/phone changed.
+                var valueEl = this.closest(".info").querySelector(".editable-value");
+                if(valueEl) valueEl.textContent = newValue || "Not available";
+
+                if(fieldKey === "name" || fieldKey === "phone"){
+                    showUsers(users);
+                }
+
+            }catch(error){
+                alert(error.message || "Failed to update " + label + ".");
+            }
+
+        };
+
+    });
 
     document.getElementById("blockBtn").onclick = async function(){
 
@@ -899,48 +964,6 @@ function showDetails(){
 
     document.getElementById("addMoneyBtn").onclick = function(){ adjustWallet(u, "credit"); };
     document.getElementById("deductMoneyBtn").onclick = function(){ adjustWallet(u, "debit"); };
-
-
-    /* BANK ACTIONS */
-
-    document.getElementById("editBankBtn").onclick = async function(){
-
-        var upi = prompt("UPI ID:", u.upi || "");
-        if(upi === null) return;
-        var bankName = prompt("Bank name:", u.bankName || u.bank || "");
-        if(bankName === null) return;
-        var accountNumber = prompt("Account number:", u.accountNumber || u.account || "");
-        if(accountNumber === null) return;
-        var ifsc = prompt("IFSC:", u.ifsc || "");
-        if(ifsc === null) return;
-
-        try{
-
-            await updateDoc(doc(db, "users", u.id), {
-                upi: upi.trim(),
-                bankName: bankName.trim(),
-                accountNumber: accountNumber.trim(),
-                ifsc: ifsc.trim()
-            });
-
-            u.upi = upi.trim();
-            u.bankName = bankName.trim();
-            u.accountNumber = accountNumber.trim();
-            u.ifsc = ifsc.trim();
-
-            await logAdminAction("Updated bank details", "Users", { userId: u.id });
-
-            document.getElementById("bankInfoGrid").innerHTML =
-                info("UPI ID", u.upi || "Not available") +
-                info("Bank", u.bankName || "Not available") +
-                info("Account Number", u.accountNumber || "Not available") +
-                info("IFSC", u.ifsc || "Not available");
-
-        }catch(error){
-            alert(error.message || "Failed to update bank details.");
-        }
-
-    };
 
 
     /* NOTES */
